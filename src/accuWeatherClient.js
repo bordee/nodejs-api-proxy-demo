@@ -94,7 +94,7 @@ module.exports = function(config, { cache, request }) {
                         || rainIntensityToProbabilityInt(dailyForecast.Day.PrecipitationIntensity))
                     : 0,
                 probabilityText = typeof "string" !== rainProbability
-                    `${rainProbability}%`
+                    ? `${rainProbability}%`
                     : rainProbability;
 
             if (
