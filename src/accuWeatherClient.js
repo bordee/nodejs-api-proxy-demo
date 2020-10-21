@@ -89,11 +89,13 @@ module.exports = function(config, { cache, request }) {
             const
                 { Value: MinValue, Unit: MinUnit } = dailyForecast.Temperature.Minimum,
                 { Value: MaxValue, Unit: MaxUnit } = dailyForecast.Temperature.Maximum,
-                rainProbabilityInt = "Rain" === dailyForecast.Day.PrecipitationType
+                rainProbability = "Rain" === dailyForecast.Day.PrecipitationType
                     ? (dailyForecast.Day.PrecipitationProbability
                         || rainIntensityToProbabilityInt(dailyForecast.Day.PrecipitationIntensity))
                     : 0,
-                probabilityText = `${rainProbabilityInt}%`;
+                probabilityText = typeof "string" !== rainProbability
+                    `${rainProbability}%`
+                    : rainProbability;
 
             if (
                 undefined === MinValue
