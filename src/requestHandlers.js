@@ -25,12 +25,12 @@ module.exports = function(forecastClient) {
             try {
                 locationKey = await forecastClient.getLocationKey(searchString);
             } catch (err) {
-                console.error("forecastClient.getLocationKey failed", err);
+                process.env.DEBUG && process.env.DEBUG && console.error("forecastClient.getLocationKey failed", err);
                 return res.status(500).json({ error: "Loading forecast data failed" });
             }
 
             if(!locationKey) {
-                return res.status(400).json({
+                return res.status(404).json({
                     error: "Location not found",
                     searchString
                 });
@@ -40,7 +40,7 @@ module.exports = function(forecastClient) {
             try {
                 forecast = await forecastClient.getForecast(locationKey, days);
             } catch (err) {
-                console.error("forecastClient.getForecast failed", err);
+                process.env.DEBUG && console.error("forecastClient.getForecast failed", err);
                 return res.status(500).json({ error: "Loading forecast data failed" });
             }
 

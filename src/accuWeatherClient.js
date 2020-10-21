@@ -1,17 +1,20 @@
 "use strict";
 
-const superagent = require("superagent");
-const flatCache = require("flat-cache");
-
-const cacheIdDefault = "accuweatherClient_default_cache";
-
-module.exports = function(config) {
-    if (config.clearCache) {
-        flatCache.clearAll();
-    }
+module.exports = function(config, { cache, request }) {
+    [
+        "accuWeatherApiKey",
+        "accuWeatherUrlPaths",
+        "accuWeatherUrl"
+    ].forEach((e) => {
+        if (
+            !config
+            || !config.hasOwnProperty(e)
+        ) {
+            throw new Error(`Missing config value: ${e}`);
+        }
+    });
 
     const
-        cache = flatCache.load(config.cacheId || cacheIdDefault),
         daysToUrlPath = function(days) {
             switch (days) {
                 case 1:
@@ -22,15 +25,12 @@ module.exports = function(config) {
             }
         },
         sendRequest = async function(path, data) {
-            return await superagent
+            return await request
                 .get(`${config.accuWeatherUrl}${path}`)
                 .query(Object.assign(
                     data || {},
                     {
-                        apikey: config.accuWeatherApiKey,
-                        metric: undefined !== config.accuWeatherUseMetricUnits
-                            ? config.accuWeatherUseMetricUnits
-                            : true
+                        apikey: config.accuWeatherApiKey
                     }
                 ))
                 .set('accept', 'json');
@@ -38,12 +38,12 @@ module.exports = function(config) {
         parseResponse = function(response) {
             switch(true) {
                 case (undefined === response):
-                    console.error(
+                    process.env.DEBUG && console.error(
                         "Accuweather request failed. Response: undefined."
                     );
                     return false;
                 case (200 !== response.statusCode):
-                    console.error(
+                    process.env.DEBUG && console.error(
                         "Accuweather request failed. Status code: ",
                         response.statusCode,
                         " Response text: ",
@@ -57,7 +57,7 @@ module.exports = function(config) {
                     try {
                         parsedResponse = JSON.parse(response.text);
                     } catch(err) {
-                        console.error("Accuweather response parse error: ", err);
+                        process.env.DEBUG && console.error("Accuweather response parse error: ", err);
                         return false;
                     }
                     return parsedResponse;
@@ -68,10 +68,10 @@ module.exports = function(config) {
                 !forecast.DailyForecasts
                 || !forecast.DailyForecasts[0]
                 || !forecast.DailyForecasts[0].Temperature
-                || !forecast.DailyForecasts[0].Temperature.Maximum
-                || !forecast.DailyForecasts[0].Temperature.Minimum
+                || !forecast.DailyForecasts[0].Temperature.hasOwnProperty("Maximum")
+                || !forecast.DailyForecasts[0].Temperature.hasOwnProperty("Minimum")
             ) {
-                console.error("Accuweather forecast response is missing temperature data. Response: ", forecast);
+                process.env.DEBUG && console.error("Accuweather forecast response is missing temperature data. Response: ", forecast);
                 return undefined;
             }
 
@@ -80,12 +80,12 @@ module.exports = function(config) {
                 { Value: MinValue, Unit: MinUnit } = forecast.DailyForecasts[0].Temperature.Minimum;
 
             if (
-                !MaxValue
-                || !MaxUnit
-                || !MinValue
-                || !MinUnit
+                undefined === MaxValue
+                || undefined === MaxUnit
+                || undefined === MinValue
+                || undefined === MinUnit
             ) {
-                console.error("Accuweather forecast response is missing temperature values. Response: ", forecast);
+                process.env.DEBUG && console.error("Accuweather forecast response is missing temperature values. Response: ", forecast);
                 return undefined;
             }
 
@@ -108,7 +108,7 @@ module.exports = function(config) {
             let locationKey = cache.getKey(searchString);
 
             if (!!locationKey) {
-                console.log("Location key loaded from cache: ", searchString, locationKey);
+                process.env.DEBUG && console.log("Location key loaded from cache: ", searchString, locationKey);
                 return locationKey;
             }
 
@@ -119,22 +119,22 @@ module.exports = function(config) {
                     { q: searchString }
                 );
             } catch (err) {
-                console.error("Accuweather location key request error: ", err);
+                process.env.DEBUG && console.error("Accuweather location key request error: ", err);
                 throw err;
             }
 
             const locations = parseResponse(locationKeyResponse);
+
             if (!locations) {
                 throw new Error("Accuweather location key response is invalid");
             }
 
-            locationKey = locations
-                && locations[0] /** @TODO 0 .. */
+            locationKey = locations[0] /** @TODO 0 .. */
                 ? locations[0].Key
                 : undefined;
 
             if (!!locationKey) {
-                console.log("Location key request success: ", locationKey);
+                process.env.DEBUG && console.log("Location key request success: ", locationKey);
                 cache.setKey(searchString, locationKey);
                 cache.save();
             }
@@ -145,10 +145,15 @@ module.exports = function(config) {
             let forecastResponse;
             try {
                 forecastResponse = await sendRequest(
-                    `${daysToUrlPath(days)}${locationKey}`
+                    `${daysToUrlPath(days)}${locationKey}`,
+                    {
+                        metric: undefined !== config.accuWeatherUseMetricUnits
+                            ? config.accuWeatherUseMetricUnits
+                            : true
+                    }
                 );
             } catch (err) {
-                console.error("Accuweather forecast request error: ", err);
+                process.env.DEBUG && console.error("Accuweather forecast request error: ", err);
                 throw err;
             }
 

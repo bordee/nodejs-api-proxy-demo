@@ -3,7 +3,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 
-module.exports = function(config, { forecastClient }) {
+module.exports = function(config, requestHandlers) {
     if (
         !config
         || !config.port
@@ -11,33 +11,49 @@ module.exports = function(config, { forecastClient }) {
         throw new Error("Invalid config: missing 'port'");
     }
 
+    if (
+        !requestHandlers
+        || "object" !== typeof requestHandlers
+    ) {
+        throw new Error("Invalid requestHandlers module");
+    }
+
     const
         server = express(),
-        handlers = require("./requestHandlers")(forecastClient);
+        startServer = function() {
+            return new Promise((resolve, reject) => {
+                const serverInstance = server.listen(config.port, function(err) {
+                    if (err) {
+                        process.env.DEBUG && console.error("Starting server failed: ", err);
+                        reject(err.message || err);
+                    }
+
+                    process.env.DEBUG && console.log("Server is listening on", config.port);
+                    resolve(serverInstance);
+                });
+            });
+        },
+        stopServer = function() {
+            return server.close();
+        };
 
     server.use(bodyParser.json());
 
-    Object.keys(handlers).forEach((k) => {
-        const handlerConfig = handlers[k];
+    Object.keys(requestHandlers).forEach((k) => {
+        const handlerConfig = requestHandlers[k];
         if (
             !handlerConfig
             || !["get", "post"].includes(handlerConfig.method)
             || "function" !== typeof handlerConfig.handler
         ) {
-            console.error("Invalid request handler in requestHandlers.js: ", JSON.stringify(handlerConfig));
+            process.env.DEBUG && console.error("Invalid request handler in requestHandlers.js: ", JSON.stringify(handlerConfig));
             return;
         }
         server[handlerConfig.method](k, handlerConfig.handler);
     });
 
-    server.listen(config.port, function(err) {
-        if (err) {
-            console.error("Starting server failed: ", err);
-            throw new Error(err.message || err);
-        }
-
-        console.log("Server is listening on", config.port);
-    });
-
-    return server;
+    return {
+        start: startServer,
+        stop: stopServer
+    };
 };
