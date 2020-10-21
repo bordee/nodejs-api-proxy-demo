@@ -44,16 +44,39 @@ Error logging to console is only active in debug mode:
 
 ### Normal response
 
+#### 1 day forecast
+
     {
         "forecast": {
+            "min": {
+                "text": [ForecastText],
+                "value": [MinimumValue],
+                "unit": [Unit]
+            },
             "max": {
                 "text": [ForecastText],
                 "value": [MaximumValue],
                 "unit": [Unit]
             },
+            "rain": {
+                "text": [RainProbabilityText],
+                "value": [RainProbabilityValue]
+            }
+        }
+    }
+
+#### 5 days forecast
+
+    {
+        "forecast": {
             "min": {
                 "text": [ForecastText],
                 "value": [MinimumValue],
+                "unit": [Unit]
+            },
+            "max": {
+                "text": [ForecastText],
+                "value": [MaximumValue],
                 "unit": [Unit]
             }
         }

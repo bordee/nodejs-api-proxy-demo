@@ -15,6 +15,18 @@ module.exports = function(config, { cache, request }) {
     });
 
     const
+        rainIntensityToProbabilityInt = function(intensity) {
+            switch (intensity) {
+                case "light":
+                    return 25;
+                case "moderate":
+                    return 50;
+                case "heavy":
+                    return 75;
+                default:
+                    return 0;
+            }
+        },
         daysToUrlPath = function(days) {
             switch (days) {
                 case 1:
@@ -63,46 +75,136 @@ module.exports = function(config, { cache, request }) {
                     return parsedResponse;
             }
         },
-        parseForecastData = function(forecast, days) {
+        parseDailyForecast = function(dailyForecast) {
             if (
-                !forecast.DailyForecasts
-                || !forecast.DailyForecasts[0]
-                || !forecast.DailyForecasts[0].Temperature
-                || !forecast.DailyForecasts[0].Temperature.hasOwnProperty("Maximum")
-                || !forecast.DailyForecasts[0].Temperature.hasOwnProperty("Minimum")
+                !dailyForecast
+                || !dailyForecast.Temperature
+                || !dailyForecast.Temperature.hasOwnProperty("Minimum")
+                || !dailyForecast.Temperature.hasOwnProperty("Maximum")
             ) {
-                process.env.DEBUG && console.error("Accuweather forecast response is missing temperature data. Response: ", forecast);
+                process.env.DEBUG && console.error("Daily forecast is missing temperature data: ", dailyForecast);
                 return undefined;
             }
 
             const
-                { Value: MaxValue, Unit: MaxUnit } = forecast.DailyForecasts[0].Temperature.Maximum,
-                { Value: MinValue, Unit: MinUnit } = forecast.DailyForecasts[0].Temperature.Minimum;
+                { Value: MinValue, Unit: MinUnit } = dailyForecast.Temperature.Minimum,
+                { Value: MaxValue, Unit: MaxUnit } = dailyForecast.Temperature.Maximum,
+                rainProbabilityInt = "Rain" === dailyForecast.Day.PrecipitationType
+                    ? (dailyForecast.Day.PrecipitationProbability
+                        || rainIntensityToProbabilityInt(dailyForecast.Day.PrecipitationIntensity))
+                    : 0,
+                probabilityText = `${rainProbabilityInt}%`;
 
             if (
-                undefined === MaxValue
-                || undefined === MaxUnit
-                || undefined === MinValue
+                undefined === MinValue
                 || undefined === MinUnit
+                || undefined === MaxValue
+                || undefined === MaxUnit
             ) {
                 process.env.DEBUG && console.error("Accuweather forecast response is missing temperature values. Response: ", forecast);
                 return undefined;
             }
 
             return {
+                "date": dailyForecast.Date,
                 "forecast": {
+                    "min": {
+                        "text": `Minimum temperature for today: ${MinValue} ${MinUnit}.`,
+                        "value": MinValue,
+                        "unit": MinUnit
+                    },
                     "max": {
-                        "text": `Maximum temperature within the next ${days} day(s): ${MaxValue} ${MaxUnit}`,
+                        "text": `Maximum temperature for today: ${MaxValue} ${MaxUnit}.`,
                         "value": MaxValue,
                         "unit": MaxUnit
                     },
-                    "min": {
-                        "text": `Minimum temperature within the next ${days} day(s): ${MinValue} ${MinUnit}`,
-                        "value": MinValue,
-                        "unit": MinUnit
+                    "rain": {
+                        "text": `The probability of rain for today is ${probabilityText}.`,
+                        "value": probabilityText
                     }
                 }
             }
+        },
+        parse5DaysForecast = function(forecasts) {
+            if (
+                !Array.isArray(forecasts)
+            ) {
+                process.env.DEBUG && console.error("Accuweather response is not an array: ", forecast);
+                return undefined;
+            }
+
+            if (
+                !forecasts[0].Temperature
+                || !forecasts[0].Temperature.hasOwnProperty("Minimum")
+                || !forecasts[0].Temperature.hasOwnProperty("Maximum")
+            ) {
+                process.env.DEBUG && console.error("Forecast is missing temperature data: ", forecasts);
+                return undefined;
+            }
+
+            let minTemp, maxTemp;
+            const
+                { Unit: MinUnit } = forecasts[0].Temperature.Minimum,
+                { Unit: MaxUnit } = forecasts[0].Temperature.Maximum;
+
+            forecasts.forEach((forecast) => {
+                if(
+                    !forecast.Temperature
+                    || !forecast.Temperature.hasOwnProperty("Minimum")
+                    || !forecast.Temperature.hasOwnProperty("Maximum")
+                ) {
+                    return;
+                }
+
+                const
+                    { Value: MinValue } = forecast.Temperature.Minimum,
+                    { Value: MaxValue } = forecast.Temperature.Maximum;
+
+                if (
+                    !minTemp
+                    || MinValue < minTemp
+                ) {
+                    minTemp = MinValue;
+                }
+                if (
+                    !maxTemp
+                    || maxTemp < MaxValue
+                ) {
+                    maxTemp = MaxValue;
+                }
+            });
+
+            return minTemp && maxTemp
+                ? {
+                    "forecast": {
+                        "max": {
+                            "text": `Maximum temperature within the next 5 days: ${maxTemp} ${MaxUnit}`,
+                            "value": maxTemp,
+                            "unit": MaxUnit
+                        },
+                        "min": {
+                            "text": `Minimum temperature within the next 5 days: ${minTemp} ${MinUnit}`,
+                            "value": minTemp,
+                            "unit": MinUnit
+                        }
+                    }
+                }
+                : undefined
+        },
+        parseForecastData = function(forecast, days) {
+            if (
+                !forecast.DailyForecasts
+                || !forecast.DailyForecasts[0]
+            ) {
+                process.env.DEBUG && console.error("Accuweather response is missing forecast data: ", forecast);
+                return undefined;
+            }
+
+            process.env.DEBUG && console.log("Forecast data: ", JSON.stringify(forecast, null, 4));
+
+            return 1 === days
+                ? parseDailyForecast(forecast.DailyForecasts[0])
+                : parse5DaysForecast(forecast.DailyForecasts);
         },
         getLocationKey = async function(searchString) {
             let locationKey = cache.getKey(searchString);
