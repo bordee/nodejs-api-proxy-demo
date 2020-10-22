@@ -14,19 +14,46 @@ const
     testMinUnit = "C",
     testMaxValue = 100,
     testMaxUnit = "F",
-    testForecast = {
+    testRainProbability = "11%",
+    testForecast1Day = {
         DailyForecasts: [{
             Temperature: {
-                Maximum: {
-                    Value: testMaxValue,
-                    Unit: testMaxUnit
-                },
                 Minimum: {
                     Value: testMinValue,
                     Unit: testMinUnit
+                },
+                Maximum: {
+                    Value: testMaxValue,
+                    Unit: testMaxUnit
                 }
+            },
+            Day: {
+                PrecipitationType: "Rain",
+                PrecipitationProbability: testRainProbability
             }
         }]
+    },
+    testForecast5Days = {
+        DailyForecasts: [
+            {
+                Temperature: {
+                    Minimum: {
+                        Value: testMinValue,
+                        Unit: testMinUnit
+                    },
+                    Maximum: {
+                        Value: testMaxValue,
+                        Unit: testMaxUnit
+                    }
+                }
+            },
+            {
+                Temperature: {
+                    Minimum: { Value: 9999 },
+                    Maximum: { Value: -1000 }
+                }
+            }
+        ]
     },
     testConfig = {
         accuWeatherApiKey: "accuWeatherApiKey",
@@ -149,8 +176,8 @@ describe("accuWeatherClient module test", function() {
             locationKeyQuerySpy.resetHistory();
             await accuWeatherClient(
                 testConfig,
-                { cache: cacheMiss, request })
-            .getLocationKey(testSearchString);
+                { cache: cacheMiss, request }
+            ).getLocationKey(testSearchString);
 
             assert.ok(locationKeyGetSpy.calledOnceWithExactly(
                 `${testConfig.accuWeatherUrl}${testConfig.accuWeatherUrlPaths.textSearch}`
@@ -187,8 +214,8 @@ describe("accuWeatherClient module test", function() {
             assert.equal(
                 await accuWeatherClient(
                     testConfig,
-                    { cache: cacheMiss, request: requestWithEmptyResponse })
-                .getLocationKey(testSearchString),
+                    { cache: cacheMiss, request: requestWithEmptyResponse }
+                ).getLocationKey(testSearchString),
                 undefined
             );
             assert.ok(cacheSetKeySpy.notCalled);
@@ -201,8 +228,8 @@ describe("accuWeatherClient module test", function() {
             assert.equal(
                 await accuWeatherClient(
                     testConfig,
-                    { cache: cacheMiss, request })
-                .getLocationKey(testSearchString),
+                    { cache: cacheMiss, request }
+                ).getLocationKey(testSearchString),
                 testLocationKeys[0].Key
             );
             assert.ok(cacheSetKeySpy.calledOnceWithExactly(testSearchString, testLocationKey));
@@ -212,61 +239,69 @@ describe("accuWeatherClient module test", function() {
 
     describe("getForecast function", function() {
         const
-            daysDefault = 1,
             forecastEmptyResponse = {
                 statusCode: 200,
                 text: "{}"
             },
-            forecastOkResponse = {
+            forecast1DayOkResponse = {
                 statusCode: 200,
-                text: JSON.stringify(testForecast)
+                text: JSON.stringify(testForecast1Day)
+            },
+            forecast5DaysOkResponse = {
+                statusCode: 200,
+                text: JSON.stringify(testForecast5Days)
             },
             forecastQueryData = {
                 apikey: testConfig.accuWeatherApiKey,
                 metric: testConfig.accuWeatherUseMetricUnits
             },
-            request = RequestMock(forecastOkResponse),
+            request1Day = RequestMock(forecast1DayOkResponse),
+            request5Days = RequestMock(forecast5DaysOkResponse),
             requestWithEmptyResponse = RequestMock(forecastEmptyResponse),
-            forecastGetSpy = sinon.spy(request, "get"),
-            forecastQuerySpy = sinon.spy(request, "query");
+            forecast1DayGetSpy = sinon.spy(request1Day, "get"),
+            forecast5DaysGetSpy = sinon.spy(request5Days, "get"),
+            forecast1DayQuerySpy = sinon.spy(request1Day, "query"),
+            forecast5DaysQuerySpy = sinon.spy(request5Days, "query");
 
         it("should reject on request error", function() {
             assert.rejects(
                 accuWeatherClient(
                     testConfig,
                     { request: requestError }
-                ).getForecast(testLocationKey, daysDefault)
+                ).getForecast(testLocationKey, undefined)
             );
         });
 
-        it("should send 1 day forecast request with proper parameters", async function() {
+        it("should send 1 day forecast request with proper parameters", function() {
             const days = 1;
-            forecastGetSpy.resetHistory();
-            forecastQuerySpy.resetHistory();
-            await accuWeatherClient(
+            forecast1DayGetSpy.resetHistory();
+            forecast1DayQuerySpy.resetHistory();
+            accuWeatherClient(
                 testConfig,
-                { request })
-            .getForecast(testLocationKey, days);
+                { request: request1Day }
+            ).getForecast(testLocationKey, days);
 
-            assert.ok(forecastGetSpy.calledOnceWithExactly(
+            assert.ok(forecast1DayGetSpy.calledOnceWithExactly(
                 `${testConfig.accuWeatherUrl}${testConfig.accuWeatherUrlPaths.forecast1Day}${testLocationKey}`,
             ));
-            assert.ok(forecastQuerySpy.calledOnceWithExactly(forecastQueryData));
+
+            assert.ok(forecast1DayQuerySpy.calledOnceWithExactly(forecastQueryData));
         });
 
-        it("should send 5 days forecast request with proper parameters", async function() {
+        it("should send 5 days forecast request with proper parameters", function() {
             const days = 5;
-            forecastGetSpy.resetHistory();
-            forecastQuerySpy.resetHistory();
-            await accuWeatherClient(
+            forecast5DaysGetSpy.resetHistory();
+            forecast5DaysQuerySpy.resetHistory();
+            accuWeatherClient(
                 testConfig,
-                { request })
-            .getForecast(testLocationKey, days);
+                { request: request5Days }
+            ).getForecast(testLocationKey, days);
 
-            assert.ok(forecastGetSpy.calledOnceWithExactly(
+            assert.ok(forecast5DaysGetSpy.calledOnceWithExactly(
                 `${testConfig.accuWeatherUrl}${testConfig.accuWeatherUrlPaths.forecast5Days}${testLocationKey}`,
             ));
-            assert.ok(forecastQuerySpy.calledOnceWithExactly(forecastQueryData));
+
+            assert.ok(forecast5DaysQuerySpy.calledOnceWithExactly(forecastQueryData));
         });
 
         it("should reject on error / invalid / falsy respose", function() {
@@ -274,21 +309,21 @@ describe("accuWeatherClient module test", function() {
                 accuWeatherClient(
                     testConfig,
                     { request: requestWithErrorResponse }
-                ).getForecast(testLocationKey, daysDefault)
+                ).getForecast(testLocationKey, undefined)
             );
 
             assert.rejects(
                 accuWeatherClient(
                     testConfig,
                     { request: requestWithInvalidResponse }
-                ).getForecast(testLocationKey, daysDefault)
+                ).getForecast(testLocationKey, undefined)
             );
 
             assert.rejects(
                 accuWeatherClient(
                     testConfig,
                     { request: requestWithFalsyResponse }
-                ).getForecast(testLocationKey, daysDefault)
+                ).getForecast(testLocationKey, undefined)
             );
         });
 
@@ -296,18 +331,43 @@ describe("accuWeatherClient module test", function() {
             assert.equal(
                 await accuWeatherClient(
                     testConfig,
-                    { cache: cacheHit, request: requestWithEmptyResponse })
-                .getForecast(testLocationKey, daysDefault),
+                    { cache: cacheHit, request: requestWithEmptyResponse }
+                ).getForecast(testLocationKey, undefined),
                 undefined
             );
         });
 
-        it("should return forecast response on success", async function() {
-            const result = await accuWeatherClient(
-                testConfig,
-                { request })
-            .getForecast(testLocationKey, daysDefault);
-console.log(result);
+        it("should return 1 day forecast response on success", async function() {
+            const
+                days = 1,
+                result = await accuWeatherClient(
+                    testConfig,
+                    { cache: cacheHit, request: request1Day }
+                ).getForecast(testLocationKey, days);
+
+            assert.ok("object" === typeof result.forecast);
+            const forecast = result.forecast;
+            assert.ok("object" === typeof forecast.max);
+            assert.ok("object" === typeof forecast.min);
+            assert.ok("object" === typeof forecast.rain);
+            assert.ok("string" === typeof forecast.max.text);
+            assert.ok("string" === typeof forecast.max.text);
+            assert.ok("string" === typeof forecast.rain.text);
+            assert.equal(forecast.max.value, testMaxValue);
+            assert.equal(forecast.max.unit, testMaxUnit);
+            assert.equal(forecast.min.value, testMinValue);
+            assert.equal(forecast.min.unit, testMinUnit);
+            assert.equal(forecast.rain.value, testRainProbability);
+        });
+
+        it("should return 5 day forecast response on success", async function() {
+            const
+                days = 5,
+                result = await accuWeatherClient(
+                    testConfig,
+                    { cache: cacheHit, request: request5Days }
+                ).getForecast(testLocationKey, days);
+
             assert.ok("object" === typeof result.forecast);
             const forecast = result.forecast;
             assert.ok("object" === typeof forecast.max);

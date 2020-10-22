@@ -91,9 +91,10 @@ module.exports = function(config, { cache, request }) {
                 { Value: MaxValue, Unit: MaxUnit } = dailyForecast.Temperature.Maximum,
                 rainProbability = "Rain" === dailyForecast.Day.PrecipitationType
                     ? (dailyForecast.Day.PrecipitationProbability
-                        || rainIntensityToProbabilityInt(dailyForecast.Day.PrecipitationIntensity))
+                        ? dailyForecast.Day.PrecipitationProbability
+                        : rainIntensityToProbabilityInt(dailyForecast.Day.PrecipitationIntensity))
                     : 0,
-                probabilityText = typeof "string" !== rainProbability
+                probabilityText = "string" !== typeof rainProbability
                     ? `${rainProbability}%`
                     : rainProbability;
 
@@ -163,20 +164,20 @@ module.exports = function(config, { cache, request }) {
                     { Value: MaxValue } = forecast.Temperature.Maximum;
 
                 if (
-                    !minTemp
+                    "number" !== typeof maxTemp
                     || MinValue < minTemp
                 ) {
                     minTemp = MinValue;
                 }
                 if (
-                    !maxTemp
+                    "number" !== typeof maxTemp
                     || maxTemp < MaxValue
                 ) {
                     maxTemp = MaxValue;
                 }
             });
 
-            return minTemp && maxTemp
+            return undefined !== minTemp && undefined !== maxTemp
                 ? {
                     "forecast": {
                         "max": {
